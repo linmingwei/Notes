@@ -2,7 +2,7 @@
 ## getBean()的流程
 首先Spring会去AbstractBeanFatory这个类里面调用doGetBean()这个方法来获取bean。如果没有获取预加载的bean，则会去父工厂去获取，如果还没有获取这个被依赖的bean，则解析并创建这个bean。  
 doGetBean()源码:  
-```
+```java
 protected <T> T doGetBean(
     final String name, final Class<T> requiredType, final Object[] args, boolean typeCheckOnly)
     throws BeansException {
@@ -159,7 +159,7 @@ return (T) bean;
 }
 ```
 如果当前bean是Factory Bean，getBean的时候不直接返回当前bean，而是调用其工厂方法获取Bean实例，下面是getObjectForBeanInstance()源码
-``` 
+```java 
 protected Object getObjectForBeanInstance(
         Object beanInstance, String name, String beanName, RootBeanDefinition mbd) {
 
@@ -209,14 +209,14 @@ getBean() 流程总结：
 
 Bean可能是多种多样的，有代理Bean、Factory Bean、自定义Bean等，这些Bean的加载，执行顺序以及结果等都是不同的。Spring是如何支持创建多种多样的bean的？  
 在AbstractAutowireCapableBeanFactory中的creatBean()方法源码中：  
-```
+```java
 protected Object createBean(String beanName, RootBeanDefinition mbd, Object[] args) throws BeanCreationException {
     if (logger.isDebugEnabled()) {
         logger.debug("Creating instance of bean '" + beanName + "'");
     }
     RootBeanDefinition mbdToUse = mbd;
 
-    //先从beandefinition获取beanclass为bean实例化做准备，复制出来一个新的beandefinition，防止多线程修改原对象
+    //先从beandefinition获取beanclass为bean实例化做准备，复制出来一个新的beandefinition，防止多线程修改原beanDefinition
     Class<?> resolvedClass = resolveBeanClass(mbd, beanName);
     if (resolvedClass != null && !mbd.hasBeanClass() && mbd.getBeanClassName() != null) {
         mbdToUse = new RootBeanDefinition(mbd);
@@ -255,20 +255,22 @@ protected Object createBean(String beanName, RootBeanDefinition mbd, Object[] ar
 ```
 
 接下来看看正常的bean是如何被创建的：
-```
+```java
 protected Object doCreateBean(final String beanName, final RootBeanDefinition mbd, final Object[] args) {
     // Instantiate the bean.
     BeanWrapper instanceWrapper = null;
     if (mbd.isSingleton()) {
+        //如果这个bean是单例的，并且在单例map中已经含有名为beanName的Bean实例，则不需要实例化当前bean，如果单例map中不存在当前bean，实例化bean并将其添加到单例map中
         instanceWrapper = this.factoryBeanInstanceCache.remove(beanName);
     }
     if (instanceWrapper == null) {
+        //创建bean实例
         instanceWrapper = createBeanInstance(beanName, mbd, args);
     }
     final Object bean = (instanceWrapper != null ? instanceWrapper.getWrappedInstance() : null);
     Class<?> beanType = (instanceWrapper != null ? instanceWrapper.getWrappedClass() : null);
 
-    // Allow post-processors to modify the merged bean definition.
+    //调用这个bean的 merge bean来定义后置处理器方法， 例如检查自动注入时的成员变量
     synchronized (mbd.postProcessingLock) {
         if (!mbd.postProcessed) {
             applyMergedBeanDefinitionPostProcessors(mbd, beanType, beanName);
@@ -278,6 +280,7 @@ protected Object doCreateBean(final String beanName, final RootBeanDefinition mb
 
     // Eagerly cache singletons to be able to resolve circular references
     // even when triggered by lifecycle interfaces like BeanFactoryAware.
+    //尽早创建bean实例，并解决循环依赖的问题
     boolean earlySingletonExposure = (mbd.isSingleton() && this.allowCircularReferences &&
             isSingletonCurrentlyInCreation(beanName));
     if (earlySingletonExposure) {
@@ -294,6 +297,7 @@ protected Object doCreateBean(final String beanName, final RootBeanDefinition mb
     }
 
     // Initialize the bean instance.
+    //此时bean已经被创建，但其属性并没有被赋值，所以要准备当前bean 中与属性相关的数据
     Object exposedObject = bean;
     try {
         populateBean(beanName, mbd, instanceWrapper);
@@ -338,6 +342,7 @@ protected Object doCreateBean(final String beanName, final RootBeanDefinition mb
     }
 
     // Register bean as disposable.
+    //如果当前bean生命周期不是多例（包含单例，request等范围的bean），也就是说需要spring管理bean的生命周期，会把bean的destory方法注册到spring上下文中
     try {
         registerDisposableBeanIfNecessary(beanName, bean, mbd);
     }
@@ -349,4 +354,5 @@ protected Object doCreateBean(final String beanName, final RootBeanDefinition mb
 }
 
 ```
+
 
